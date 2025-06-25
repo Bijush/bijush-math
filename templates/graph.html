@@ -28,14 +28,14 @@
     {% if exact_roots %}
         <h3>Exact Roots:</h3>
         {% for r in exact_roots %}
-            <div>\[ {{ r|safe }} \]</div>
+            <div>{{ r|safe }}</div>
         {% endfor %}
     {% endif %}
 
     {% if approx_roots %}
         <h3>Approximate Roots:</h3>
         {% for r in approx_roots %}
-            <div>\[ {{ r|safe }} \]</div>
+            <div>{{ r|safe }}</div>
         {% endfor %}
     {% endif %}
 
