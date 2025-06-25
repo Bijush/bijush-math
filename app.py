@@ -9,6 +9,7 @@ app = Flask(__name__)
 @app.route('/', methods=['GET', 'POST'])
 def index():
     steps = ''
+    expression = ''
     if request.method == 'POST':
         equation = request.form['equation']
         x = symbols('x')
@@ -21,33 +22,35 @@ def index():
                 lhs_expr = sympify(equation)
                 rhs_expr = 0
 
+            expression = str(lhs_expr)  # For graph plotting
+
             eq = Eq(lhs_expr, rhs_expr)
 
             steps += "<h3>Step 1: Given Equation</h3>"
-            steps += f"\[ {latex(eq)} \]<br>"
+            steps += rf"\[ {latex(eq)} \]<br>"
 
             combined_expr = lhs_expr - rhs_expr
             expanded_expr = combined_expr.expand()
             steps += "<h3>Step 2: Simplify Equation</h3>"
-            steps += f"\[ {latex(combined_expr)} = 0 \Rightarrow {latex(expanded_expr)} = 0 \]<br>"
+            steps += rf"\[ {latex(combined_expr)} = 0 \Rightarrow {latex(expanded_expr)} = 0 \]<br>"
 
             factored_expr = expanded_expr.factor()
             if factored_expr != expanded_expr:
                 steps += "<h3>Step 3: Factor the Expression</h3>"
-                steps += f"\[ {latex(expanded_expr)} = {latex(factored_expr)} \]<br>"
+                steps += rf"\[ {latex(expanded_expr)} = {latex(factored_expr)} \]<br>"
 
             steps += "<h3>Step 4: Solve</h3>"
             x_solutions = solve(Eq(factored_expr, 0), x)
             if x_solutions:
                 for sol in x_solutions:
-                    steps += f"\[ x = {latex(sol)} \approx {sol.evalf(5)} \]<br>"
+                    steps += rf"\[ x = {latex(sol)} \approx {sol.evalf(5)} \]<br>"
             else:
                 steps += "No real solution found."
 
         except Exception as e:
             steps = f"Error: {str(e)}"
 
-    return render_template('index.html', result=steps)
+    return render_template('index.html', result=steps, expression=expression)
 
 @app.route('/graph', methods=['GET', 'POST'])
 def graph():
@@ -73,8 +76,8 @@ def graph():
 
             for r in roots:
                 if r.is_real:
-                    exact_roots.append(f"\\[ x = {latex(r)} \\]")
-                    approx_roots.append(f"\\[ x \\approx {r.evalf(5)} \\]")
+                    exact_roots.append(rf"\[ x = {latex(r)} \]")
+                    approx_roots.append(rf"\[ x \approx {r.evalf(5)} \]")
 
             # Plotting the graph
             plt.clf()
