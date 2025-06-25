@@ -2,18 +2,11 @@
 <html>
 <head>
     <title>Graph Plotter</title>
-    <!-- MathJax for rendering LaTeX -->
     <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-    <script id="MathJax-script" async
-            src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
     <h1>Graph Plotter</h1>
-    <form method="POST">
-        <input type="text" name="expression" placeholder="e.g. x**2 - 4" size="40">
-        <button type="submit">Plot</button>
-    </form>
 
     {% if expression_latex %}
         <h3>Expression:</h3>
@@ -28,15 +21,19 @@
     {% if exact_roots %}
         <h3>Exact Roots:</h3>
         {% for r in exact_roots %}
-            <div>{{ r|safe }}</div>
+        <div>{{ r|safe }}</div>
         {% endfor %}
     {% endif %}
 
     {% if approx_roots %}
         <h3>Approximate Roots:</h3>
         {% for r in approx_roots %}
-            <div>{{ r|safe }}</div>
+        <div>{{ r|safe }}</div>
         {% endfor %}
+    {% endif %}
+
+    {% if message %}
+        <div style="color:red">{{ message }}</div>
     {% endif %}
 
     <br><a href="/">Back to Solver</a>
