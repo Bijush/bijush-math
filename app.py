@@ -3,8 +3,17 @@ from sympy import symbols, Eq, solve, sympify, latex, expand, factor
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import re
 
 app = Flask(__name__)
+
+# Auto-correction: insert * and convert √ to sqrt()
+def preprocess_expression(expr):
+    expr = expr.replace('√', 'sqrt')  # Replace square root symbol
+    expr = re.sub(r'(\d)([a-zA-Z\(])', r'\1*\2', expr)  # Insert * between digit and var/(
+    expr = re.sub(r'(\))(\w)', r'\1*\2', expr)          # Insert * between ) and var/num
+    expr = re.sub(r'(\d)(sqrt)', r'\1*sqrt', expr)      # Insert * between digit and sqrt
+    return expr
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -14,12 +23,13 @@ def index():
         input_text = request.form['equation']
         try:
             exprs = [e.strip() for e in input_text.split(',')]
+            exprs = [preprocess_expression(e) for e in exprs]
             equations = []
             all_symbols = set()
 
             for e in exprs:
                 if '=' in e:
-                    lhs, rhs = e.split('=', 1)  # ✅ safer split
+                    lhs, rhs = e.split('=', 1)
                     lhs_expr = sympify(lhs)
                     rhs_expr = sympify(rhs)
                     eq = Eq(lhs_expr, rhs_expr)
@@ -32,14 +42,14 @@ def index():
                 all_symbols.update(rhs_expr.free_symbols)
                 equations.append(eq)
 
-            expression = str(lhs_expr)  # For graph
+            expression = str(lhs_expr)  # for graph
 
             steps += "<h3>Step 1: Given Equation(s)</h3>"
             for eq in equations:
                 steps += f"<div>\\[{latex(eq)}\\]</div>"
 
             if len(equations) == 1 and len(all_symbols) == 1:
-                # Single equation with one variable
+                # One variable, single equation
                 var = list(all_symbols)[0]
                 combined = equations[0].lhs - equations[0].rhs
                 expanded = expand(combined)
@@ -58,7 +68,6 @@ def index():
                         steps += f"<div>\\[{latex(var)} = {latex(s)} \\approx {s.evalf(5)}\\]</div>"
                     else:
                         steps += f"<div>\\[{latex(var)} = {s}\\]</div>"
-
             else:
                 # System of equations
                 sol = solve(equations)
@@ -84,7 +93,6 @@ def index():
 
     return render_template('index.html', result=steps, expression=expression)
 
-
 @app.route('/graph', methods=['GET', 'POST'])
 def graph():
     message = ''
@@ -97,12 +105,12 @@ def graph():
         expr = request.form['expression']
         x = symbols('x')
         try:
+            expr = preprocess_expression(expr)
             y_expr = sympify(expr)
             latex_expr = latex(y_expr)
 
             x_vals = np.linspace(-10, 10, 400)
 
-            # Check if it's constant or variable-based
             if y_expr.free_symbols:
                 f = lambda val: float(y_expr.evalf(subs={x: val}))
                 y_vals = [f(val) for val in x_vals]
@@ -117,7 +125,6 @@ def graph():
                     exact_roots.append(f"\\[ x = {latex(r)} \\]")
                     approx_roots.append(f"\\[ x \\approx {r.evalf(5)} \\]")
 
-            # Plot
             plt.clf()
             plt.figure(figsize=(8, 5))
             plt.plot(x_vals, y_vals, label=rf"$y = {latex_expr}$")
