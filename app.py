@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request
-from sympy import symbols, Eq, solve, sympify, latex
-from sympy import expand, factor
+from sympy import symbols, Eq, solve, sympify, latex, expand, factor, Poly
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -23,14 +22,15 @@ def index():
                 lhs_expr = sympify(equation)
                 rhs_expr = 0
 
-            expression = str(lhs_expr)  # for graph
-
+            expression = str(lhs_expr)
             eq = Eq(lhs_expr, rhs_expr)
+
             steps += "<h3>Step 1: Given Equation</h3>"
             steps += rf"\[ {latex(eq)} \]<br>"
 
             combined_expr = lhs_expr - rhs_expr
             expanded_expr = expand(combined_expr)
+
             steps += "<h3>Step 2: Simplify Equation</h3>"
             steps += rf"\[ {latex(combined_expr)} = 0 \Rightarrow {latex(expanded_expr)} = 0 \]<br>"
 
@@ -39,10 +39,10 @@ def index():
                 steps += "<h3>Step 3: Factor the Expression</h3>"
                 steps += rf"\[ {latex(expanded_expr)} = {latex(factored_expr)} \]<br>"
 
-            x_solutions = solve(Eq(factored_expr, 0), x)
-
-            if expanded_expr.is_polynomial() and expanded_expr.degree() == 2:
-                coeffs = expanded_expr.as_poly().all_coeffs()
+            # Quadratic formula explanation if degree is 2
+            poly = Poly(expanded_expr, x)
+            if poly.is_univariate and poly.degree() == 2:
+                coeffs = poly.all_coeffs()
                 if len(coeffs) == 3:
                     a, b, c = map(float, coeffs)
                     discriminant = b**2 - 4*a*c
@@ -53,6 +53,8 @@ def index():
                     steps += rf"\[ D = b^2 - 4ac = {b}^2 - 4 \cdot {a} \cdot {c} = {discriminant} \]<br>"
                     steps += rf"\[ x = \frac{{-{b} \pm \sqrt{{{discriminant}}}}}{{2 \cdot {a}}} \]<br>"
 
+            # Solve
+            x_solutions = solve(Eq(factored_expr, 0), x)
             steps += "<h3>Step 5: Solve</h3>"
             if x_solutions:
                 for sol in x_solutions:
@@ -93,19 +95,21 @@ def graph():
                     exact_roots.append(rf"\[ x = {latex(r)} \]")
                     approx_roots.append(rf"\[ x \approx {r.evalf(5)} \]")
 
-            # Plot
+            # Plotting
             plt.clf()
             plt.figure(figsize=(8, 5))
             plt.plot(x_vals, y_vals, label=f"$y = {latex_expr}$", color='blue')
             plt.axhline(0, color='black', linewidth=0.5)
             plt.axvline(0, color='black', linewidth=0.5)
-            for r in roots:
-                if r.is_real:
-                    plt.plot(float(r), 0, 'ro')
             plt.xlabel('x')
             plt.ylabel('y')
             plt.title('Graph of the Expression')
             plt.grid(True)
+
+            for r in roots:
+                if r.is_real:
+                    plt.plot(float(r), 0, 'ro')
+
             plt.legend()
             filename = 'static/graph.png'
             os.makedirs('static', exist_ok=True)
