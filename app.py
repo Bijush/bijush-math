@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request
-from sympy import symbols, Eq, solve, sympify, latex, expand, factor, Poly
+from sympy import symbols, Eq, solve, sympify, latex, sqrt, simplify
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -10,8 +10,9 @@ app = Flask(__name__)
 def index():
     steps = ''
     expression = ''
+    formula = ''
     if request.method == 'POST':
-        equation = request.form['equation']
+        equation = request.form['equation'].replace('√', 'sqrt')
         x = symbols('x')
         try:
             if '=' in equation:
@@ -29,44 +30,42 @@ def index():
             steps += rf"\[ {latex(eq)} \]<br>"
 
             combined_expr = lhs_expr - rhs_expr
-            expanded_expr = expand(combined_expr)
-
+            expanded_expr = combined_expr.expand()
             steps += "<h3>Step 2: Simplify Equation</h3>"
             steps += rf"\[ {latex(combined_expr)} = 0 \Rightarrow {latex(expanded_expr)} = 0 \]<br>"
 
-            factored_expr = factor(expanded_expr)
+            deg = expanded_expr.as_poly().degree()
+            factored_expr = expanded_expr.factor()
             if factored_expr != expanded_expr:
                 steps += "<h3>Step 3: Factor the Expression</h3>"
                 steps += rf"\[ {latex(expanded_expr)} = {latex(factored_expr)} \]<br>"
 
-            # Quadratic formula explanation if degree is 2
-            poly = Poly(expanded_expr, x)
-            if poly.is_univariate and poly.degree() == 2:
-                coeffs = poly.all_coeffs()
-                if len(coeffs) == 3:
-                    a, b, c = map(float, coeffs)
-                    discriminant = b**2 - 4*a*c
-
-                    steps += "<h3>Step 4: Use Quadratic Formula</h3>"
-                    steps += r"\[ x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a} \]<br>"
-                    steps += rf"\[ a = {a},\ b = {b},\ c = {c} \]<br>"
-                    steps += rf"\[ D = b^2 - 4ac = {b}^2 - 4 \cdot {a} \cdot {c} = {discriminant} \]<br>"
-                    steps += rf"\[ x = \frac{{-{b} \pm \sqrt{{{discriminant}}}}}{{2 \cdot {a}}} \]<br>"
-
-            # Solve
+            steps += "<h3>Step 4: Solve</h3>"
             x_solutions = solve(Eq(factored_expr, 0), x)
-            steps += "<h3>Step 5: Solve</h3>"
             if x_solutions:
                 for sol in x_solutions:
                     steps += rf"\[ x = {latex(sol)} \approx {sol.evalf(5)} \]<br>"
             else:
                 steps += "No real solution found."
 
+            # Add quadratic formula
+            if deg == 2:
+                a = expanded_expr.coeff(x, 2)
+                b = expanded_expr.coeff(x, 1)
+                c = expanded_expr.coeff(x, 0)
+                D = simplify(b**2 - 4*a*c)
+                formula = "<h3>Quadratic Formula:</h3>"
+                formula += rf"\[ x = \frac{{-({latex(b)}) \pm \sqrt{{{latex(D)}}}}}{{2 \cdot {latex(a)}}} \]"
+
+            # Add cubic info
+            elif deg == 3:
+                formula = "<h3>Cubic Equation:</h3>"
+                formula += "Solved using Cardano’s method (exact roots displayed above)."
+
         except Exception as e:
-            steps = f"<b>Error:</b> {str(e)}"
+            steps = f"Error: {str(e)}"
 
-    return render_template('index.html', result=steps, expression=expression)
-
+    return render_template('index.html', result=steps, formula=formula, expression=expression)
 
 @app.route('/graph', methods=['GET', 'POST'])
 def graph():
@@ -77,7 +76,7 @@ def graph():
     approx_roots = []
 
     if request.method == 'POST':
-        expr = request.form['expression']
+        expr = request.form['expression'].replace('√', 'sqrt')
         x = symbols('x')
         try:
             y_expr = sympify(expr)
@@ -95,10 +94,10 @@ def graph():
                     exact_roots.append(rf"\[ x = {latex(r)} \]")
                     approx_roots.append(rf"\[ x \approx {r.evalf(5)} \]")
 
-            # Plotting
+            # Plotting the graph
             plt.clf()
             plt.figure(figsize=(8, 5))
-            plt.plot(x_vals, y_vals, label=f"$y = {latex_expr}$", color='blue')
+            plt.plot(x_vals, y_vals, label=f"$y = {latex_expr}$")
             plt.axhline(0, color='black', linewidth=0.5)
             plt.axvline(0, color='black', linewidth=0.5)
             plt.xlabel('x')
@@ -125,7 +124,6 @@ def graph():
                            expression_latex=latex_expr,
                            exact_roots=exact_roots,
                            approx_roots=approx_roots)
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10000, debug=True)
