@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request
-from sympy import symbols, Eq, solve, sympify, latex, expand, factor, solveset, S
-from sympy.parsing.sympy_parser import parse_expr
+from sympy import symbols, Eq, solve, sympify, latex
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -9,86 +8,83 @@ app = Flask(__name__)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    result = ''
     steps = ''
-    expression_for_graph = ''
-
+    expression = ''
     if request.method == 'POST':
-        equation_input = request.form['equation']
-        lines = [line.strip() for line in equation_input.splitlines() if line.strip()]
+        raw_input = request.form['equation']
+        lines = raw_input.strip().split('\n')
         eqs = []
         all_vars = set()
 
         try:
-            # Parse equations
             for line in lines:
                 if '=' in line:
                     lhs, rhs = line.split('=')
                     lhs_expr = sympify(lhs)
                     rhs_expr = sympify(rhs)
-
-                    # Avoid errors with numeric-only inputs like "5 = 5"
-                    if isinstance(lhs_expr, (int, float)) and isinstance(rhs_expr, (int, float)):
-                        continue
-
-                    eq = Eq(lhs_expr, rhs_expr)
                 else:
                     lhs_expr = sympify(line)
                     rhs_expr = 0
-                    eq = Eq(lhs_expr, rhs_expr)
 
+                # Skip if both are just numbers
+                if isinstance(lhs_expr, (int, float)) and isinstance(rhs_expr, (int, float)):
+                    continue
+
+                eq = Eq(lhs_expr, rhs_expr)
                 eqs.append(eq)
-                all_vars |= lhs_expr.free_symbols | rhs_expr.free_symbols
+
+                if hasattr(lhs_expr, 'free_symbols'):
+                    all_vars |= lhs_expr.free_symbols
+                if hasattr(rhs_expr, 'free_symbols'):
+                    all_vars |= rhs_expr.free_symbols
 
             if not eqs:
-                result = "No valid equations entered."
-                return render_template("index.html", result=result)
+                raise ValueError("No valid equations or expressions found.")
 
-            # If single equation — show steps
-            if len(eqs) == 1 and len(all_vars) == 1:
+            # Auto-detect single or system
+            if len(all_vars) == 1:
                 x = list(all_vars)[0]
                 eq = eqs[0]
-                lhs_expr = eq.lhs
-                rhs_expr = eq.rhs
+                expression = str(eq.lhs - eq.rhs)
 
                 steps += "<h3>Step 1: Given Equation</h3>"
                 steps += rf"\[ {latex(eq)} \]<br>"
 
-                combined_expr = lhs_expr - rhs_expr
-                expanded_expr = expand(combined_expr)
-
+                combined_expr = eq.lhs - eq.rhs
+                expanded_expr = combined_expr.expand()
                 steps += "<h3>Step 2: Simplify Equation</h3>"
                 steps += rf"\[ {latex(combined_expr)} = 0 \Rightarrow {latex(expanded_expr)} = 0 \]<br>"
 
-                factored_expr = factor(expanded_expr)
+                factored_expr = expanded_expr.factor()
                 if factored_expr != expanded_expr:
                     steps += "<h3>Step 3: Factor the Expression</h3>"
                     steps += rf"\[ {latex(expanded_expr)} = {latex(factored_expr)} \]<br>"
 
                 steps += "<h3>Step 4: Solve</h3>"
-                solutions = solve(Eq(factored_expr, 0), x)
-                if solutions:
-                    for sol in solutions:
+                x_solutions = solve(Eq(factored_expr, 0), x)
+                if x_solutions:
+                    for sol in x_solutions:
                         steps += rf"\[ x = {latex(sol)} \approx {sol.evalf(5)} \]<br>"
                 else:
                     steps += "No real solution found."
 
-                expression_for_graph = str(lhs_expr - rhs_expr)
-
             else:
-                # Multiple equations or multi-variable
-                sol = solve(eqs, list(all_vars), dict=True)
-                if sol:
-                    steps = "<h3>Solution:</h3>"
-                    for s in sol:
-                        steps += r"\[ " + ", ".join([f"{str(k)} = {latex(v)}" for k, v in s.items()]) + r" \]<br>"
+                # System of equations
+                solution = solve(eqs)
+                steps += "<h3>Solution:</h3>"
+                if isinstance(solution, list):
+                    for sol in solution:
+                        steps += rf"\[ {sol} \]<br>"
+                elif isinstance(solution, dict):
+                    for var, val in solution.items():
+                        steps += rf"\[ {latex(var)} = {latex(val)} \approx {val.evalf(5)} \]<br>"
                 else:
-                    steps = "No solution found."
+                    steps += "No solution found."
 
         except Exception as e:
             steps = f"Error: {str(e)}"
 
-    return render_template('index.html', result=steps, expression=expression_for_graph)
+    return render_template('index.html', result=steps, expression=expression)
 
 @app.route('/graph', methods=['GET', 'POST'])
 def graph():
@@ -109,28 +105,31 @@ def graph():
             x_vals = np.linspace(-10, 10, 400)
             y_vals = [f(val) for val in x_vals]
 
-            roots = solve(Eq(y_expr, 0), x)
+            eq = Eq(y_expr, 0)
+            roots = solve(eq, x)
+
             for r in roots:
                 if r.is_real:
                     exact_roots.append(rf"\[ x = {latex(r)} \]")
                     approx_roots.append(rf"\[ x \approx {r.evalf(5)} \]")
 
-            # Plotting
             plt.clf()
             plt.figure(figsize=(8, 5))
-            plt.plot(x_vals, y_vals, label=rf"$y = {latex_expr}$")
+            plt.plot(x_vals, y_vals, label=f"$y = {latex_expr}$")
             plt.axhline(0, color='black', linewidth=0.5)
             plt.axvline(0, color='black', linewidth=0.5)
+            plt.xlabel('x')
+            plt.ylabel('y')
+            plt.title('Graph of the Expression')
+            plt.grid(True)
+
             for r in roots:
                 if r.is_real:
                     plt.plot(float(r), 0, 'ro')
-            plt.title("Graph of the Expression")
-            plt.xlabel('x')
-            plt.ylabel('y')
-            plt.grid(True)
+
             plt.legend()
-            os.makedirs('static', exist_ok=True)
             filename = 'static/graph.png'
+            os.makedirs('static', exist_ok=True)
             plt.savefig(filename)
             plt.close()
 
