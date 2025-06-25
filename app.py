@@ -11,62 +11,79 @@ def index():
     steps = ''
     expression = ''
     if request.method == 'POST':
-        raw_equation = request.form['equation']
-        equation = raw_equation.replace('√', 'sqrt')  # internal conversion
-        x, y = symbols('x y')
+        input_text = request.form['equation']
         try:
-            if '=' in equation:
-                parts = equation.split('=')
-                if equation.count('=') == 1:
-                    lhs, rhs = parts
+            exprs = [e.strip() for e in input_text.split(',')]
+            equations = []
+            all_symbols = set()
+
+            for e in exprs:
+                if '=' in e:
+                    lhs, rhs = e.split('=', 1)  # ✅ safer split
                     lhs_expr = sympify(lhs)
                     rhs_expr = sympify(rhs)
                     eq = Eq(lhs_expr, rhs_expr)
-
-                    steps += "<h3>Step 1: Given Equation</h3>"
-                    steps += rf"\[ {latex(sympify(raw_equation))} \]<br>"
-
-                    combined_expr = lhs_expr - rhs_expr
-                    expanded_expr = expand(combined_expr)
-                    steps += "<h3>Step 2: Simplify Equation</h3>"
-                    steps += rf"\[ {latex(combined_expr)} = 0 \Rightarrow {latex(expanded_expr)} = 0 \]<br>"
-
-                    factored_expr = factor(expanded_expr)
-                    if factored_expr != expanded_expr:
-                        steps += "<h3>Step 3: Factor the Expression</h3>"
-                        steps += rf"\[ {latex(expanded_expr)} = {latex(factored_expr)} \]<br>"
-
-                    steps += "<h3>Step 4: Solve</h3>"
-                    x_solutions = solve(Eq(factored_expr, 0), x)
-                    if x_solutions:
-                        for sol in x_solutions:
-                            steps += rf"\[ x = {latex(sol)} \approx {sol.evalf(5)} \]<br>"
-                    else:
-                        steps += "No real solution found."
-                    expression = str(lhs_expr)
                 else:
-                    # Handle system of equations like "x + y = 2, x - y = 1"
-                    eqs = [Eq(sympify(p.split('=')[0]), sympify(p.split('=')[1])) for p in raw_equation.split(',')]
-                    sol = solve(eqs)
-                    steps += "<h3>Solving system of equations:</h3>"
-                    for eqn in eqs:
-                        steps += rf"\[ {latex(eqn)} \]<br>"
-                    steps += "<h3>Solution:</h3>"
-                    for var, val in sol.items():
-                        steps += rf"\[ {latex(var)} = {latex(val)} \approx {val.evalf(5)} \]<br>"
-                    expression = ''  # no single expression for graph
+                    lhs_expr = sympify(e)
+                    rhs_expr = 0
+                    eq = Eq(lhs_expr, rhs_expr)
+
+                all_symbols.update(lhs_expr.free_symbols)
+                all_symbols.update(rhs_expr.free_symbols)
+                equations.append(eq)
+
+            expression = str(lhs_expr)  # For graph
+
+            steps += "<h3>Step 1: Given Equation(s)</h3>"
+            for eq in equations:
+                steps += f"<div>\\[{latex(eq)}\\]</div>"
+
+            if len(equations) == 1 and len(all_symbols) == 1:
+                # Single equation with one variable
+                var = list(all_symbols)[0]
+                combined = equations[0].lhs - equations[0].rhs
+                expanded = expand(combined)
+                factored = factor(expanded)
+
+                steps += "<h3>Step 2: Simplify & Factor</h3>"
+                steps += f"<div>\\[{latex(combined)} = 0 \\Rightarrow {latex(expanded)} = 0\\]</div>"
+
+                if factored != expanded:
+                    steps += f"<div>\\[{latex(expanded)} = {latex(factored)}\\]</div>"
+
+                steps += "<h3>Step 3: Solve</h3>"
+                sols = solve(Eq(factored, 0), var)
+                for s in sols:
+                    if hasattr(s, 'evalf'):
+                        steps += f"<div>\\[{latex(var)} = {latex(s)} \\approx {s.evalf(5)}\\]</div>"
+                    else:
+                        steps += f"<div>\\[{latex(var)} = {s}\\]</div>"
+
             else:
-                expr = sympify(equation)
-                steps += "<h3>Simplified Expression:</h3>"
-                steps += rf"\[ {latex(expr)} \]<br>"
-                sol = solve(expr)
-                steps += "<h3>Solution:</h3>"
-                for s in sol:
-                    steps += rf"\[ x = {latex(s)} \approx {s.evalf(5)} \]<br>"
-                expression = str(expr)
+                # System of equations
+                sol = solve(equations)
+                steps += "<h3>Step 2: Solving System of Equations</h3>"
+                if isinstance(sol, list):
+                    for soln in sol:
+                        for var, val in soln.items():
+                            steps += f"<div>\\[{latex(var)} = {latex(val)}"
+                            if hasattr(val, 'evalf'):
+                                steps += f" \\approx {val.evalf(5)}"
+                            steps += f"\\]</div>"
+                elif isinstance(sol, dict):
+                    for var, val in sol.items():
+                        steps += f"<div>\\[{latex(var)} = {latex(val)}"
+                        if hasattr(val, 'evalf'):
+                            steps += f" \\approx {val.evalf(5)}"
+                        steps += f"\\]</div>"
+                else:
+                    steps += f"<div>Solution: {sol}</div>"
+
         except Exception as e:
-            steps = f"Error: {str(e)}"
+            steps = f"<div style='color:red'>Error: {str(e)}</div>"
+
     return render_template('index.html', result=steps, expression=expression)
+
 
 @app.route('/graph', methods=['GET', 'POST'])
 def graph():
@@ -77,28 +94,33 @@ def graph():
     approx_roots = []
 
     if request.method == 'POST':
-        raw_expr = request.form['expression']
-        expr = raw_expr.replace('√', 'sqrt')
+        expr = request.form['expression']
         x = symbols('x')
         try:
             y_expr = sympify(expr)
-            latex_expr = latex(sympify(raw_expr))  # Display LaTeX using original √
+            latex_expr = latex(y_expr)
 
-            f = lambda val: float(y_expr.evalf(subs={x: val}))
             x_vals = np.linspace(-10, 10, 400)
-            y_vals = [f(val) for val in x_vals]
+
+            # Check if it's constant or variable-based
+            if y_expr.free_symbols:
+                f = lambda val: float(y_expr.evalf(subs={x: val}))
+                y_vals = [f(val) for val in x_vals]
+            else:
+                y_vals = [float(y_expr)] * len(x_vals)
 
             eq = Eq(y_expr, 0)
             roots = solve(eq, x)
 
             for r in roots:
-                if r.is_real:
-                    exact_roots.append(rf"\[ x = {latex(r)} \]")
-                    approx_roots.append(rf"\[ x \approx {r.evalf(5)} \]")
+                if hasattr(r, "is_real") and r.is_real:
+                    exact_roots.append(f"\\[ x = {latex(r)} \\]")
+                    approx_roots.append(f"\\[ x \\approx {r.evalf(5)} \\]")
 
+            # Plot
             plt.clf()
             plt.figure(figsize=(8, 5))
-            plt.plot(x_vals, y_vals, label=f"$y = {latex_expr}$")
+            plt.plot(x_vals, y_vals, label=rf"$y = {latex_expr}$")
             plt.axhline(0, color='black', linewidth=0.5)
             plt.axvline(0, color='black', linewidth=0.5)
             plt.xlabel('x')
@@ -107,7 +129,7 @@ def graph():
             plt.grid(True)
 
             for r in roots:
-                if r.is_real:
+                if hasattr(r, "is_real") and r.is_real:
                     plt.plot(float(r), 0, 'ro')
 
             plt.legend()
