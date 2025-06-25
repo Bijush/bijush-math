@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request
-from sympy import symbols, Eq, solve, sympify, latex, expand, factor
+from sympy import symbols, Eq, solve, sympify, latex
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -20,27 +20,27 @@ def index():
             else:
                 lhs_expr = sympify(equation)
                 rhs_expr = 0
+
             eq = Eq(lhs_expr, rhs_expr)
 
             steps += "<h3>Step 1: Given Equation</h3>"
-            steps += f"\\[ {latex(eq)} \\]<br>"
+            steps += f"\[ {latex(eq)} \]<br>"
 
-            combined = lhs_expr - rhs_expr
-            expanded = expand(combined)
+            combined_expr = lhs_expr - rhs_expr
+            expanded_expr = combined_expr.expand()
+            steps += "<h3>Step 2: Simplify Equation</h3>"
+            steps += f"\[ {latex(combined_expr)} = 0 \Rightarrow {latex(expanded_expr)} = 0 \]<br>"
 
-            steps += "<h3>Step 2: Bring all terms to one side</h3>"
-            steps += f"\\[ {latex(lhs_expr)} - ({latex(rhs_expr)}) = 0 \\Rightarrow {latex(expanded)} = 0 \\]<br>"
+            factored_expr = expanded_expr.factor()
+            if factored_expr != expanded_expr:
+                steps += "<h3>Step 3: Factor the Expression</h3>"
+                steps += f"\[ {latex(expanded_expr)} = {latex(factored_expr)} \]<br>"
 
-            factored = factor(expanded)
-            if factored != expanded:
-                steps += "<h3>Step 3: Factor the expression</h3>"
-                steps += f"\\[ {latex(expanded)} = {latex(factored)} \\]<br>"
-
-            steps += "<h3>Step 4: Apply zero-product property</h3>"
-            solutions = solve(Eq(factored, 0), x)
-            if solutions:
-                for sol in solutions:
-                    steps += f"\\[ x = {latex(sol)} \\approx {sol.evalf(5)} \\]<br>"
+            steps += "<h3>Step 4: Solve</h3>"
+            x_solutions = solve(Eq(factored_expr, 0), x)
+            if x_solutions:
+                for sol in x_solutions:
+                    steps += f"\[ x = {latex(sol)} \approx {sol.evalf(5)} \]<br>"
             else:
                 steps += "No real solution found."
 
@@ -71,6 +71,12 @@ def graph():
             eq = Eq(y_expr, 0)
             roots = solve(eq, x)
 
+            for r in roots:
+                if r.is_real:
+                    exact_roots.append(f"\\[ x = {latex(r)} \\]")
+                    approx_roots.append(f"\\[ x \\approx {r.evalf(5)} \\]")
+
+            # Plotting the graph
             plt.clf()
             plt.figure(figsize=(8, 5))
             plt.plot(x_vals, y_vals, label=f"$y = {latex_expr}$")
@@ -84,8 +90,6 @@ def graph():
             for r in roots:
                 if r.is_real:
                     plt.plot(float(r), 0, 'ro')
-                    exact_roots.append(f"\\[ x = {latex(r)} \\]")
-                    approx_roots.append(f"\\[ x \\approx {r.evalf(5)} \\]")
 
             plt.legend()
             filename = 'static/graph.png'
