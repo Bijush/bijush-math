@@ -1,16 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Textbook-Style Equation Solver</title>
+    <title>Equation Solver</title>
     <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
-    <h1>Solve Equation (Textbook Steps)</h1>
+    <h1>Solve an Equation</h1>
     <form method="POST">
         <input type="text" name="equation" placeholder="e.g. x**2 + 5*x + 6 = 0" size="40">
         <button type="submit">Solve</button>
     </form>
     <div>{{ result|safe }}</div>
+    <br><a href="/graph">Go to Graph Plotter</a>
 </body>
 </html>
