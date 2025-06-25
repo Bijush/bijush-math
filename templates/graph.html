@@ -2,42 +2,35 @@
 <html>
 <head>
     <title>Graph Plotter</title>
-    <meta charset="UTF-8">
-    <style>
-        body { font-family: sans-serif; margin: 20px; }
-        input[type="text"] { width: 80%; padding: 8px; }
-        button { padding: 8px 16px; margin-left: 10px; }
-        img { margin-top: 20px; border: 1px solid #ddd; border-radius: 8px; }
-        .box { background: #f8f8f8; padding: 15px; border-radius: 10px; margin-top: 20px; }
-    </style>
     <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-    <script id="MathJax-script" async
-      src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
     <h1>Graph Plotter</h1>
-    <form method="post">
-        <label>Enter Expression (e.g. x**2 - 4):</label><br>
-        <input type="text" name="expression" placeholder="e.g. x**2 - 4" required>
+    <form method="POST">
+        <input type="text" name="expression" placeholder="e.g. x**2 - 4" size="40">
         <button type="submit">Plot</button>
     </form>
-
     {% if expression_latex %}
-    <div class="box">
-        <p>\[ y = {{ expression_latex }} \]</p>
-        <p><strong>Roots:</strong> {{ roots }}</p>
-    </div>
+        <h3>Expression:</h3>
+        <div>\\[ y = {{ expression_latex }} \\]</div>
     {% endif %}
-
     {% if image %}
-    <img src="{{ image }}" width="600" alt="Graph">
+        <h3>Graph:</h3>
+        <img src="{{ image }}" width="600">
     {% endif %}
-
-    {% if message %}
-    <p style="color:red;">{{ message }}</p>
+    {% if exact_roots %}
+        <h3>Exact Roots:</h3>
+        {% for r in exact_roots %}
+        <div>{{ r|safe }}</div>
+        {% endfor %}
     {% endif %}
-
-    <hr>
-    <a href="/"><button>Back to Equation Solver</button></a>
+    {% if approx_roots %}
+        <h3>Approximate Roots:</h3>
+        {% for r in approx_roots %}
+        <div>{{ r|safe }}</div>
+        {% endfor %}
+    {% endif %}
+    <br><a href="/">Back to Solver</a>
 </body>
 </html>
