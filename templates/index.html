@@ -6,12 +6,21 @@
     <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body>
-    <h1>Solve an Equation</h1>
+    <h1>Equation Solver</h1>
     <form method="POST">
-        <input type="text" name="equation" placeholder="e.g. x**2 + 5*x + 6 = 0" size="40">
+        <input type="text" name="equation" placeholder="e.g. x**2 - 5*x + 6 = 0" size="40">
         <button type="submit">Solve</button>
     </form>
-    <div>{{ result|safe }}</div>
-    <br><a href="/graph">Go to Graph Plotter</a>
+
+    {% if result %}
+        <div>{{ result|safe }}</div>
+    {% endif %}
+
+    {% if expression %}
+    <form method="POST" action="/graph">
+        <input type="hidden" name="expression" value="{{ expression }}">
+        <button type="submit">Plot Graph</button>
+    </form>
+    {% endif %}
 </body>
 </html>
