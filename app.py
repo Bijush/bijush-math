@@ -7,12 +7,12 @@ import re
 
 app = Flask(__name__)
 
-# Auto-correction: insert * and convert √ to sqrt()
+# Auto-correct expression formatting
 def preprocess_expression(expr):
-    expr = expr.replace('√', 'sqrt')  # Replace square root symbol
-    expr = re.sub(r'(\d)([a-zA-Z\(])', r'\1*\2', expr)  # Insert * between digit and var/(
-    expr = re.sub(r'(\))(\w)', r'\1*\2', expr)          # Insert * between ) and var/num
-    expr = re.sub(r'(\d)(sqrt)', r'\1*sqrt', expr)      # Insert * between digit and sqrt
+    expr = expr.replace('√', 'sqrt')  # Replace √ with sqrt
+    expr = re.sub(r'(\d)([a-zA-Z\(])', r'\1*\2', expr)  # 2x → 2*x
+    expr = re.sub(r'(\))(\w)', r'\1*\2', expr)          # )x → )*x
+    expr = re.sub(r'(\d)(sqrt)', r'\1*sqrt', expr)      # 2sqrt → 2*sqrt
     return expr
 
 @app.route('/', methods=['GET', 'POST'])
@@ -22,8 +22,7 @@ def index():
     if request.method == 'POST':
         input_text = request.form['equation']
         try:
-            exprs = [e.strip() for e in input_text.split(',')]
-            exprs = [preprocess_expression(e) for e in exprs]
+            exprs = [preprocess_expression(e.strip()) for e in input_text.split(',')]
             equations = []
             all_symbols = set()
 
@@ -38,18 +37,21 @@ def index():
                     rhs_expr = 0
                     eq = Eq(lhs_expr, rhs_expr)
 
-                all_symbols.update(lhs_expr.free_symbols)
-                all_symbols.update(rhs_expr.free_symbols)
+                # ✅ Avoid error on int by checking attributes
+                if hasattr(lhs_expr, 'free_symbols'):
+                    all_symbols.update(lhs_expr.free_symbols)
+                if hasattr(rhs_expr, 'free_symbols'):
+                    all_symbols.update(rhs_expr.free_symbols)
+
                 equations.append(eq)
 
-            expression = str(lhs_expr)  # for graph
+            expression = str(lhs_expr)
 
             steps += "<h3>Step 1: Given Equation(s)</h3>"
             for eq in equations:
                 steps += f"<div>\\[{latex(eq)}\\]</div>"
 
             if len(equations) == 1 and len(all_symbols) == 1:
-                # One variable, single equation
                 var = list(all_symbols)[0]
                 combined = equations[0].lhs - equations[0].rhs
                 expanded = expand(combined)
@@ -57,21 +59,20 @@ def index():
 
                 steps += "<h3>Step 2: Simplify & Factor</h3>"
                 steps += f"<div>\\[{latex(combined)} = 0 \\Rightarrow {latex(expanded)} = 0\\]</div>"
-
                 if factored != expanded:
                     steps += f"<div>\\[{latex(expanded)} = {latex(factored)}\\]</div>"
 
                 steps += "<h3>Step 3: Solve</h3>"
                 sols = solve(Eq(factored, 0), var)
                 for s in sols:
+                    steps += f"<div>\\[{latex(var)} = {latex(s)}"
                     if hasattr(s, 'evalf'):
-                        steps += f"<div>\\[{latex(var)} = {latex(s)} \\approx {s.evalf(5)}\\]</div>"
-                    else:
-                        steps += f"<div>\\[{latex(var)} = {s}\\]</div>"
+                        steps += f" \\approx {s.evalf(5)}"
+                    steps += f"\\]</div>"
+
             else:
-                # System of equations
-                sol = solve(equations)
                 steps += "<h3>Step 2: Solving System of Equations</h3>"
+                sol = solve(equations)
                 if isinstance(sol, list):
                     for soln in sol:
                         for var, val in soln.items():
@@ -108,7 +109,6 @@ def graph():
             expr = preprocess_expression(expr)
             y_expr = sympify(expr)
             latex_expr = latex(y_expr)
-
             x_vals = np.linspace(-10, 10, 400)
 
             if y_expr.free_symbols:
@@ -125,6 +125,7 @@ def graph():
                     exact_roots.append(f"\\[ x = {latex(r)} \\]")
                     approx_roots.append(f"\\[ x \\approx {r.evalf(5)} \\]")
 
+            # Plotting
             plt.clf()
             plt.figure(figsize=(8, 5))
             plt.plot(x_vals, y_vals, label=rf"$y = {latex_expr}$")
