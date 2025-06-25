@@ -8,9 +8,10 @@
 <body>
     <h1>Equation Solver</h1>
     <form method="POST">
-        <input type="text" name="equation" placeholder="e.g. x**2 - 5*x + 6 = 0" size="40">
-        <button type="submit">Solve</button>
-    </form>
+    <textarea name="equation" rows="4" cols="50" placeholder="e.g.\nx + y = 10\n2x - 4y = 20"></textarea><br>
+    <button type="submit">Solve</button>
+</form>
+
 
     {% if result %}
         <div>{{ result|safe }}</div>
