@@ -12,51 +12,50 @@ def index():
     steps = ''
     expression = ''
     if request.method == 'POST':
-        equation = request.form['equation']
+        equations_text = request.form['equation']
         try:
-            expr = sympify(equation)
-            free_syms = list(expr.free_symbols)
-            if not free_syms:
-                steps = f"Answer: {expr.evalf()}"
-                return render_template('index.html', result=steps, expression='')
-            x = free_syms[0]
+            lines = [line.strip() for line in equations_text.splitlines() if line.strip()]
+            eqs = []
+            all_vars = set()
 
-            # Handling equations with "="
-            if '=' in equation:
-                lhs, rhs = equation.split('=')
-                lhs_expr = sympify(lhs)
-                rhs_expr = sympify(rhs)
+            for line in lines:
+                if '=' in line:
+                    lhs, rhs = line.split('=')
+                    lhs_expr = sympify(lhs)
+                    rhs_expr = sympify(rhs)
+                else:
+                    lhs_expr = sympify(line)
+                    rhs_expr = 0
+                eq = Eq(lhs_expr, rhs_expr)
+                eqs.append(eq)
+                all_vars.update(lhs_expr.free_symbols)
+                all_vars.update(rhs_expr.free_symbols)
+
+            all_vars = sorted(all_vars, key=lambda s: str(s))  # consistent order
+            steps += "<h3>Step 1: System of Equations</h3>"
+            for e in eqs:
+                steps += rf"\[ {latex(e)} \]<br>"
+
+            solutions = solve(eqs, all_vars)
+
+            steps += "<h3>Step 2: Solving</h3>"
+            if solutions:
+                if isinstance(solutions, dict):
+                    for var, val in solutions.items():
+                        steps += rf"\[ {latex(var)} = {latex(val)} \approx {val.evalf(5)} \]<br>"
+                else:
+                    for sol in solutions:
+                        steps += "<div>"
+                        for var, val in zip(all_vars, sol):
+                            steps += rf"\[ {latex(var)} = {latex(val)} \approx {val.evalf(5)} \]<br>"
+                        steps += "</div>"
             else:
-                lhs_expr = sympify(equation)
-                rhs_expr = 0
+                steps += "No solution found."
 
-            expression = str(lhs_expr - rhs_expr)
-
-            eq = Eq(lhs_expr, rhs_expr)
-            steps += "<h3>Step 1: Given Equation</h3>"
-            steps += rf"\[ {latex(eq)} \]<br>"
-
-            combined_expr = lhs_expr - rhs_expr
-            expanded_expr = expand(combined_expr)
-            steps += "<h3>Step 2: Simplify Equation</h3>"
-            steps += rf"\[ {latex(combined_expr)} = 0 \Rightarrow {latex(expanded_expr)} = 0 \]<br>"
-
-            factored_expr = factor(expanded_expr)
-            if factored_expr != expanded_expr:
-                steps += "<h3>Step 3: Factor the Expression</h3>"
-                steps += rf"\[ {latex(expanded_expr)} = {latex(factored_expr)} \]<br>"
-
-            steps += "<h3>Step 4: Solve</h3>"
-            x_solutions = solve(Eq(factored_expr, 0), x)
-            if x_solutions:
-                for sol in x_solutions:
-                    steps += rf"\[ x = {latex(sol)} \approx {sol.evalf(5)} \]<br>"
-            else:
-                steps += "No real solution found."
         except Exception as e:
             steps = f"Error: {str(e)}"
 
-    return render_template('index.html', result=steps, expression=expression)
+    return render_template('index.html', result=steps, expression='')
 
 
 @app.route('/graph', methods=['GET', 'POST'])
