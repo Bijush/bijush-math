@@ -1,3 +1,5 @@
-Flask
-sympy
-gunicorn
+Flask==2.3.2
+sympy==1.12
+matplotlib==3.7.1
+numpy==1.24.3
+gunicorn==21.2.0
