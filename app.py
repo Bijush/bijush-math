@@ -37,7 +37,6 @@ def index():
                     rhs_expr = 0
                     eq = Eq(lhs_expr, rhs_expr)
 
-                # ✅ Avoid error on int by checking attributes
                 if hasattr(lhs_expr, 'free_symbols'):
                     all_symbols.update(lhs_expr.free_symbols)
                 if hasattr(rhs_expr, 'free_symbols'):
@@ -65,10 +64,8 @@ def index():
                 steps += "<h3>Step 3: Solve</h3>"
                 sols = solve(Eq(factored, 0), var)
                 for s in sols:
-                    steps += f"<div>\\[{latex(var)} = {latex(s)}"
-                    if hasattr(s, 'evalf'):
-                        steps += f" \\approx {s.evalf(5)}"
-                    steps += f"\\]</div>"
+                    approx = s.evalf(5) if hasattr(s, 'evalf') else s
+                    steps += f"<div>\\[{latex(var)} = {latex(s)} \\approx {latex(approx)}\\]</div>"
 
             else:
                 steps += "<h3>Step 2: Solving System of Equations</h3>"
@@ -76,16 +73,12 @@ def index():
                 if isinstance(sol, list):
                     for soln in sol:
                         for var, val in soln.items():
-                            steps += f"<div>\\[{latex(var)} = {latex(val)}"
-                            if hasattr(val, 'evalf'):
-                                steps += f" \\approx {val.evalf(5)}"
-                            steps += f"\\]</div>"
+                            approx = val.evalf(5) if hasattr(val, 'evalf') else val
+                            steps += f"<div>\\[{latex(var)} = {latex(val)} \\approx {latex(approx)}\\]</div>"
                 elif isinstance(sol, dict):
                     for var, val in sol.items():
-                        steps += f"<div>\\[{latex(var)} = {latex(val)}"
-                        if hasattr(val, 'evalf'):
-                            steps += f" \\approx {val.evalf(5)}"
-                        steps += f"\\]</div>"
+                        approx = val.evalf(5) if hasattr(val, 'evalf') else val
+                        steps += f"<div>\\[{latex(var)} = {latex(val)} \\approx {latex(approx)}\\]</div>"
                 else:
                     steps += f"<div>Solution: {sol}</div>"
 
@@ -123,9 +116,8 @@ def graph():
             for r in roots:
                 if hasattr(r, "is_real") and r.is_real:
                     exact_roots.append(f"\\[ x = {latex(r)} \\]")
-                    approx_roots.append(f"\\[ x \\approx {r.evalf(5)} \\]")
+                    approx_roots.append(f"\\[ x \\approx {latex(r.evalf(5))} \\]")
 
-            # Plotting
             plt.clf()
             plt.figure(figsize=(8, 5))
             plt.plot(x_vals, y_vals, label=rf"$y = {latex_expr}$")
