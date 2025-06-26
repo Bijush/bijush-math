@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, send_file
-from sympy import symbols, Eq, solve, sympify, latex, expand, factor
+from sympy import symbols, Eq, solve, sympify, latex, expand, factor, Poly
 from sympy.core.expr import Expr
 import matplotlib.pyplot as plt
 import numpy as np
@@ -62,11 +62,22 @@ def index():
                 if factored != expanded:
                     steps += rf"<div>\[{latex(expanded)} = {latex(factored)}\]</div>"
 
-                steps += "<h3>Step 3: Solve</h3>"
+                steps += "<h3>Step 3: Solve (Symbolic Roots)</h3>"
                 sols = solve(Eq(factored, 0), var)
                 for s in sols:
-                    approx = s.evalf(5) if hasattr(s, 'evalf') else s
-                    steps += rf"<div>\[{latex(var)} = {latex(s)} \quad (\text{{or}} \approx {latex(approx)})\]</div>"
+                    steps += rf"<div>\[{latex(var)} = {latex(s)}\]</div>"
+
+                # Numeric roots with multiplicity
+                poly = Poly(expanded, var)
+                num_roots = poly.nroots()
+                steps += "<h3>Numeric Roots</h3>"
+                for nr in num_roots:
+                    r = complex(nr)
+                    if abs(r.imag) < 1e-8:
+                        steps += rf"<div>\[x \approx {r.real:.5f}\]</div>"
+                    else:
+                        sign = '+' if r.imag >= 0 else '-'
+                        steps += rf"<div>\[x \approx {r.real:.5f} {sign} {abs(r.imag):.5f}i\]</div>"
 
             # System of equations
             else:
@@ -75,12 +86,10 @@ def index():
                 if isinstance(sol, list):
                     for soln in sol:
                         for var, val in soln.items():
-                            approx = val.evalf(5) if hasattr(val, 'evalf') else val
-                            steps += rf"<div>\[{latex(var)} = {latex(val)} \quad (\text{{or}} \approx {latex(approx)})\]</div>"
+                            steps += rf"<div>\[{latex(var)} = {latex(val)}\]</div>"
                 elif isinstance(sol, dict):
                     for var, val in sol.items():
-                        approx = val.evalf(5) if hasattr(val, 'evalf') else val
-                        steps += rf"<div>\[{latex(var)} = {latex(val)} \quad (\text{{or}} \approx {latex(approx)})\]</div>"
+                        steps += rf"<div>\[{latex(var)} = {latex(val)}\]</div>"
                 else:
                     steps += f"<div>Solution: {sol}</div>"
 
@@ -97,20 +106,15 @@ def graph():
     y_expr = sympify(expr_proc)
     expr_latex = latex(y_expr)
 
-    # Solve for roots
+    # Symbolic roots
     x = symbols('x')
     sols = solve(Eq(y_expr, 0), x)
-    exact_roots, approx_roots = [], []
-    for r in sols:
-        if hasattr(r, 'is_real') and r.is_real:
-            exact_roots.append(rf"\[ x = {latex(r)} \]")
-            approx_roots.append(rf"\[ x \approx {latex(r.evalf(5))} \]")
+    exact_roots = [rf"\[x = {latex(r)}\]" for r in sols if getattr(r, 'is_real', True)]
 
     return render_template('graph.html',
                            expression=expr,
                            expression_latex=expr_latex,
-                           exact_roots=exact_roots,
-                           approx_roots=approx_roots)
+                           exact_roots=exact_roots)
 
 @app.route('/plot.png')
 def plot_png():
