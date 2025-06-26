@@ -1,41 +1,46 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Graph Plotter</title>
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <meta charset="UTF-8">
+  <title>Graph Result</title>
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async
+          src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <style>
+    body { font-family: Arial; margin: 20px; max-width: 800px; }
+    img { width: 100%; border: 1px solid #ccc; margin-top: 20px; }
+  </style>
 </head>
 <body>
-    <h1>Graph Plotter</h1>
+  <h1>📊 Graph of Your Equation</h1>
 
-    {% if expression_latex %}
-        <h3>Expression:</h3>
-        <div>\[ y = {{ expression_latex }} \]</div>
-    {% endif %}
+  {% if expression_latex %}
+  <div>
+    <h3>Equation:</h3>
+    <div>\[ y = {{ expression_latex|safe }} \]</div>
+  </div>
+  {% endif %}
 
-    {% if image %}
-        <h3>Graph:</h3>
-        <img src="{{ image }}" width="600">
-    {% endif %}
+  <div>
+    <h3>Graph:</h3>
+    <!-- on-the-fly image -->
+    <img src="/plot.png?expr={{ expression|urlencode }}" alt="Graph">
+  </div>
 
-    {% if exact_roots %}
-        <h3>Exact Roots:</h3>
-        {% for r in exact_roots %}
-        <div>{{ r|safe }}</div>
-        {% endfor %}
-    {% endif %}
+  {% if exact_roots %}
+  <div>
+    <h3>Exact Roots:</h3>
+    {% for r in exact_roots %}<div>{{ r|safe }}</div>{% endfor %}
+  </div>
+  {% endif %}
 
-    {% if approx_roots %}
-        <h3>Approximate Roots:</h3>
-        {% for r in approx_roots %}
-        <div>{{ r|safe }}</div>
-        {% endfor %}
-    {% endif %}
+  {% if approx_roots %}
+  <div>
+    <h3>Approximate Roots:</h3>
+    {% for r in approx_roots %}<div>{{ r|safe }}</div>{% endfor %}
+  </div>
+  {% endif %}
 
-    {% if message %}
-        <div style="color:red">{{ message }}</div>
-    {% endif %}
-
-    <br><a href="/">Back to Solver</a>
+  <p><a href="/">← Back to Solver</a></p>
 </body>
 </html>
