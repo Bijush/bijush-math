@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, send_file
-from sympy import symbols, Eq, solve, sympify, latex, expand, factor, Poly
+from sympy import symbols, Eq, solve, sympify, latex, expand, factor, Poly, nsimplify
 from sympy.core.expr import Expr
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,7 +28,6 @@ def index():
             equations = []
             all_symbols = set()
 
-            # Build SymPy equations and collect symbols
             for e in exprs:
                 if '=' in e:
                     lhs, rhs = e.split('=', 1)
@@ -45,12 +44,10 @@ def index():
 
                 equations.append(eq)
 
-            # Step-by-step output
             steps += "<h3>Step 1: Given Equation(s)</h3>"
             for eq in equations:
                 steps += rf"<div>\[{latex(eq)}\]</div>"
 
-            # Single-variable case
             if len(equations) == 1 and len(all_symbols) == 1:
                 var = next(iter(all_symbols))
                 combined = equations[0].lhs - equations[0].rhs
@@ -65,31 +62,35 @@ def index():
                 steps += "<h3>Step 3: Solve (Symbolic Roots)</h3>"
                 sols = solve(Eq(factored, 0), var)
                 for s in sols:
-                    steps += rf"<div>\[{latex(var)} = {latex(s)}\]</div>"
+                    simp = nsimplify(s, rational=True)
+                    if simp == int(simp):
+                        steps += rf"<div>\[{latex(var)} = {int(simp)}\]</div>"
+                    else:
+                        steps += rf"<div>\[{latex(var)} = {latex(simp)}\]</div>"
 
-                # Numeric roots with multiplicity
                 poly = Poly(expanded, var)
                 num_roots = poly.nroots()
                 steps += "<h3>Numeric Roots</h3>"
-                for nr in num_roots:
-                    r = complex(nr)
+                for r in num_roots:
+                    r = complex(r)
                     if abs(r.imag) < 1e-8:
                         steps += rf"<div>\[x \approx {r.real:.5f}\]</div>"
                     else:
                         sign = '+' if r.imag >= 0 else '-'
                         steps += rf"<div>\[x \approx {r.real:.5f} {sign} {abs(r.imag):.5f}i\]</div>"
 
-            # System of equations
             else:
                 steps += "<h3>Step 2: Solving System of Equations</h3>"
                 sol = solve(equations)
                 if isinstance(sol, list):
                     for soln in sol:
                         for var, val in soln.items():
-                            steps += rf"<div>\[{latex(var)} = {latex(val)}\]</div>"
+                            simp = nsimplify(val, rational=True)
+                            steps += rf"<div>\[{latex(var)} = {latex(simp)}\]</div>"
                 elif isinstance(sol, dict):
                     for var, val in sol.items():
-                        steps += rf"<div>\[{latex(var)} = {latex(val)}\]</div>"
+                        simp = nsimplify(val, rational=True)
+                        steps += rf"<div>\[{latex(var)} = {latex(simp)}\]</div>"
                 else:
                     steps += f"<div>Solution: {sol}</div>"
 
@@ -100,16 +101,22 @@ def index():
 
 @app.route('/graph', methods=['POST'])
 def graph():
-    # Render the graph page; image is served by /plot.png
     expr = request.form.get('expression', '')
     expr_proc = preprocess_expression(expr)
     y_expr = sympify(expr_proc)
     expr_latex = latex(y_expr)
 
-    # Symbolic roots
     x = symbols('x')
     sols = solve(Eq(y_expr, 0), x)
-    exact_roots = [rf"\[x = {latex(r)}\]" for r in sols if getattr(r, 'is_real', True)]
+    exact_roots = []
+
+    for r in sols:
+        if getattr(r, 'is_real', True):
+            simp = nsimplify(r, rational=True)
+            if simp == int(simp):
+                exact_roots.append(rf"\[x = {int(simp)}\]")
+            else:
+                exact_roots.append(rf"\[x = {latex(simp)}\]")
 
     return render_template('graph.html',
                            expression=expr,
@@ -118,7 +125,6 @@ def graph():
 
 @app.route('/plot.png')
 def plot_png():
-    # Stream the PNG directly from memory
     expr = request.args.get('expr', '')
     expr_proc = preprocess_expression(expr)
     y_expr = sympify(expr_proc)
@@ -138,6 +144,12 @@ def plot_png():
     plt.grid(True)
     plt.legend()
 
+    # Plot real roots as red dots
+    sols = solve(Eq(y_expr, 0), x)
+    for r in sols:
+        if getattr(r, 'is_real', True):
+            plt.plot(float(r.evalf()), 0, 'ro')
+
     buf = io.BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight')
     plt.close()
@@ -145,7 +157,6 @@ def plot_png():
     return send_file(buf, mimetype='image/png')
 
 if __name__ == '__main__':
-    # disable GUI backend
     import matplotlib
-    matplotlib.use('Agg')
+    matplotlib.use('Agg')  # Disable GUI backend
     app.run(host='0.0.0.0', port=10000, debug=True)
