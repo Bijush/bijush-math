@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, send_file
-from sympy import symbols, Eq, solve, sympify, latex, expand, factor, Poly, nsimplify
-from sympy.core.expr import Expr
+from sympy import symbols, Eq, solve, sympify, latex, expand, factor, Poly, simplify
 import matplotlib.pyplot as plt
 import numpy as np
 import io
@@ -8,21 +7,24 @@ import re
 
 app = Flask(__name__)
 
-# Auto-correct and support √x notation and implicit multiplication
 def preprocess_expression(expr):
-    expr = expr.replace('√', 'sqrt')                    # √ → sqrt
-    expr = re.sub(r'(\d)([a-zA-Z\(])', r'\1*\2', expr)  # 2x → 2*x
-    expr = re.sub(r'(\))(\w)', r'\1*\2', expr)          # )x → )*x
-    expr = re.sub(r'(\d)(sqrt)', r'\1*sqrt', expr)      # 2sqrt → 2*sqrt
-    expr = re.sub(r'sqrt(\d+)', r'sqrt(\1)', expr)      # sqrt3 → sqrt(3)
+    expr = expr.replace('√', 'sqrt')
+    expr = re.sub(r'(\d)([a-zA-Z\(])', r'\1*\2', expr)
+    expr = re.sub(r'(\))(\w)', r'\1*\2', expr)
+    expr = re.sub(r'(\d)(sqrt)', r'\1*sqrt', expr)
+    expr = re.sub(r'sqrt(\d+)', r'sqrt(\1)', expr)
     return expr
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     steps = ''
     expression = ''
+    show_decimal = False
+
     if request.method == 'POST':
         expression = request.form['equation']
+        show_decimal = 'show_decimal' in request.form
+
         try:
             exprs = [preprocess_expression(e.strip()) for e in expression.split(',')]
             equations = []
@@ -37,11 +39,8 @@ def index():
                     lhs_expr, rhs_expr = sympify(e), 0
                     eq = Eq(lhs_expr, rhs_expr)
 
-                if isinstance(lhs_expr, Expr):
-                    all_symbols.update(lhs_expr.free_symbols)
-                if isinstance(rhs_expr, Expr):
-                    all_symbols.update(rhs_expr.free_symbols)
-
+                all_symbols.update(getattr(lhs_expr, 'free_symbols', set()))
+                all_symbols.update(getattr(rhs_expr, 'free_symbols', set()))
                 equations.append(eq)
 
             steps += "<h3>Step 1: Given Equation(s)</h3>"
@@ -59,19 +58,44 @@ def index():
                 if factored != expanded:
                     steps += rf"<div>\[{latex(expanded)} = {latex(factored)}\]</div>"
 
-                steps += "<h3>Step 3: Solve (Symbolic Roots)</h3>"
-                sols = solve(Eq(factored, 0), var)
-                for s in sols:
-                    simp = nsimplify(s, rational=True)
-                    if simp == int(simp):
-                        steps += rf"<div>\[{latex(var)} = {int(simp)}\]</div>"
-                    else:
-                        steps += rf"<div>\[{latex(var)} = {latex(simp)}\]</div>"
-
                 poly = Poly(expanded, var)
-                num_roots = poly.nroots()
+                degree = poly.degree()
+
+                if degree == 2:
+                    steps += "<h3>Step 3: Quadratic Formula Steps</h3>"
+                    a, b, c = poly.all_coeffs()
+                    a, b, c = sympify(a), sympify(b), sympify(c)
+                    D = simplify(b**2 - 4*a*c)
+                    sqrt_D = simplify(D**0.5)
+                    x1 = simplify((-b + sqrt_D) / (2*a))
+                    x2 = simplify((-b - sqrt_D) / (2*a))
+
+                    steps += rf"<div>Standard form: \[ ax^2 + bx + c = 0 \]</div>"
+                    steps += rf"<div>\[a = {latex(a)},\ b = {latex(b)},\ c = {latex(c)}\]</div>"
+                    steps += rf"<div>\[x = \frac{{-b \pm \sqrt{{b^2 - 4ac}}}}{{2a}} \]</div>"
+                    steps += rf"<div>\[x = \frac{{-{latex(b)} \pm \sqrt{{{latex(D)}}}}}{{2 \cdot {latex(a)}}} = \frac{{{latex(-b)} \pm {latex(sqrt_D)}}}{{{latex(2*a)}}} \]</div>"
+                    steps += rf"<div>\[x_1 = {latex(x1)};\quad x_2 = {latex(x2)}\]</div>"
+
+                    if show_decimal:
+                        steps += "<h4>Step 4: Decimal Approximations</h4>"
+                        try:
+                            steps += rf"<div>\[x_1 \approx {x1.evalf():.5f},\quad x_2 \approx {x2.evalf():.5f}\]</div>"
+                        except:
+                            steps += "<div>Could not evaluate decimal roots</div>"
+                else:
+                    steps += "<h3>Step 3: Solve (Exact Roots)</h3>"
+                    sols = solve(Eq(factored, 0), var)
+                    for s in sols:
+                        steps += rf"<div>\[{latex(var)} = {latex(s)}\]</div>"
+                        if show_decimal:
+                            try:
+                                val = float(s.evalf())
+                                steps += rf"<div>\[\approx {val:.5f}\]</div>"
+                            except:
+                                pass
+
                 steps += "<h3>Numeric Roots</h3>"
-                for r in num_roots:
+                for r in poly.nroots():
                     r = complex(r)
                     if abs(r.imag) < 1e-8:
                         steps += rf"<div>\[x \approx {r.real:.5f}\]</div>"
@@ -85,12 +109,22 @@ def index():
                 if isinstance(sol, list):
                     for soln in sol:
                         for var, val in soln.items():
-                            simp = nsimplify(val, rational=True)
-                            steps += rf"<div>\[{latex(var)} = {latex(simp)}\]</div>"
+                            steps += rf"<div>\[{latex(var)} = {latex(val)}\]</div>"
+                            if show_decimal:
+                                try:
+                                    valf = float(val.evalf())
+                                    steps += rf"<div>\[\approx {valf:.5f}\]</div>"
+                                except:
+                                    pass
                 elif isinstance(sol, dict):
                     for var, val in sol.items():
-                        simp = nsimplify(val, rational=True)
-                        steps += rf"<div>\[{latex(var)} = {latex(simp)}\]</div>"
+                        steps += rf"<div>\[{latex(var)} = {latex(val)}\]</div>"
+                        if show_decimal:
+                            try:
+                                valf = float(val.evalf())
+                                steps += rf"<div>\[\approx {valf:.5f}\]</div>"
+                            except:
+                                pass
                 else:
                     steps += f"<div>Solution: {sol}</div>"
 
@@ -111,12 +145,12 @@ def graph():
     exact_roots = []
 
     for r in sols:
-        if getattr(r, 'is_real', True):
-            simp = nsimplify(r, rational=True)
-            if simp == int(simp):
-                exact_roots.append(rf"\[x = {int(simp)}\]")
-            else:
-                exact_roots.append(rf"\[x = {latex(simp)}\]")
+        exact_roots.append(rf"\[x = {latex(r)}\]")
+        try:
+            val = float(r.evalf())
+            exact_roots.append(rf"\[\approx {val:.5f}\]")
+        except:
+            continue
 
     return render_template('graph.html',
                            expression=expr,
@@ -131,11 +165,8 @@ def plot_png():
     x = symbols('x')
 
     xs = np.linspace(-10, 10, 400)
-    if y_expr.free_symbols:
-        f = lambda v: float(y_expr.evalf(subs={x: v}))
-        ys = [f(v) for v in xs]
-    else:
-        ys = [float(y_expr)] * len(xs)
+    f = lambda v: float(y_expr.evalf(subs={x: v}))
+    ys = [f(v) for v in xs]
 
     plt.figure(figsize=(6, 4))
     plt.plot(xs, ys, label=rf"$y = {latex(y_expr)}$")
@@ -144,11 +175,13 @@ def plot_png():
     plt.grid(True)
     plt.legend()
 
-    # Plot real roots as red dots
     sols = solve(Eq(y_expr, 0), x)
     for r in sols:
-        if getattr(r, 'is_real', True):
-            plt.plot(float(r.evalf()), 0, 'ro')
+        try:
+            val = float(r.evalf())
+            plt.plot(val, 0, 'ro')
+        except:
+            continue
 
     buf = io.BytesIO()
     plt.savefig(buf, format='png', bbox_inches='tight')
@@ -158,5 +191,5 @@ def plot_png():
 
 if __name__ == '__main__':
     import matplotlib
-    matplotlib.use('Agg')  # Disable GUI backend
+    matplotlib.use('Agg')
     app.run(host='0.0.0.0', port=10000, debug=True)
